@@ -189,6 +189,8 @@ std::string slcan_node::encode_data(const can_msgs::msg::CanMsg &msg)
 		sprintf(tmp, "%02x", s);
 		ret.append(tmp, 2);
 	}
+
+	ret += "\r";
 	
 	return ret;
 }
