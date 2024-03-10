@@ -22,12 +22,12 @@ slcan_node::slcan_node() : rclcpp::Node("slcan_node")
 	if(not is_open)
 		return;
 	
-	send("O");
+	send("O\r");
 }
 
 slcan_node::~slcan_node()
 {
-	send("C");
+	send("C\r");
     this->close_serial_port();
 }
 
