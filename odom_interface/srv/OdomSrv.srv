@@ -1,8 +1,10 @@
-bool request
+bool req
 
 ---
 
 std_msgs/Header header
+
+bool available
 
 float32[3] steer
 float32[3] wheel
