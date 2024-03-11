@@ -18,6 +18,12 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <termios.h>
+#include <sys/ioctl.h>
+
+#include <thread>
+#include <queue>
+
+void Write(const int fd);
 
 class slcan_node : public rclcpp::Node
 {
@@ -26,6 +32,8 @@ class slcan_node : public rclcpp::Node
 	rclcpp::Publisher<can_msgs::msg::CanMsg>::SharedPtr m_pub_data;
 	rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr m_uart_fail_pub;
 	rclcpp::TimerBase::SharedPtr m_recv_timer;
+
+	std::thread m_write;
 
 	bool open_serial_port();
 

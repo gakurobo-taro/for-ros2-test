@@ -4,17 +4,23 @@
 
 using namespace std::chrono_literals;
 
+namespace global
+{
+	bool terminate = false;
+	std::queue<std::string> messages;
+}
+
 slcan_node::slcan_node() : rclcpp::Node("slcan_node")
 {
 	auto param_slcan_topic_name = rcl_interfaces::msg::ParameterDescriptor{};
-	this->declare_parameter("slcan_topic_name", "slcan_recv", param_slcan_topic_name);
+	this->declare_parameter("slcan_topic_name", "slcan", param_slcan_topic_name);
 	auto topic_name = get_parameter("slcan_topic_name").as_string();
 
 	m_sub_can = this->create_subscription<can_msgs::msg::CanMsg>(
 		topic_name, 10, std::bind(&slcan_node::sub_callback, this, std::placeholders::_1));
 	m_pub_data = this->create_publisher<can_msgs::msg::CanMsg>("slcan_recv", 10);
 	m_recv_timer = this->create_wall_timer(
-		100ms, std::bind(&slcan_node::recv_timer_callback, this));
+		1ms, std::bind(&slcan_node::recv_timer_callback, this));
 	m_uart_fail_pub = this->create_publisher<std_msgs::msg::Bool>("uart_fail", 10);
 
 	auto is_open = this->open_serial_port();
@@ -22,13 +28,23 @@ slcan_node::slcan_node() : rclcpp::Node("slcan_node")
 	if(not is_open)
 		return;
 	
+	m_write = std::thread(std::bind(Write, m_fd));
+	
+	//m_write.join();
+
+	RCLCPP_INFO(this->get_logger(), "config ok");
+
 	send("O\r");
 }
 
 slcan_node::~slcan_node()
 {
 	send("C\r");
-    this->close_serial_port();
+
+//	while(global::messages.size() > 0);
+
+	global::terminate = true;
+	this->close_serial_port();
 }
 
 bool slcan_node::open_serial_port()
@@ -36,7 +52,7 @@ bool slcan_node::open_serial_port()
 	auto param_serial_name = rcl_interfaces::msg::ParameterDescriptor{};
 	auto param_baudrate    = rcl_interfaces::msg::ParameterDescriptor{};
 	param_serial_name.description = "";
-	this->declare_parameter("serial_name", "", param_serial_name);
+	this->declare_parameter("serial_name", "/dev/ttyACM0", param_serial_name);
 	this->declare_parameter("baudrate", 115200, param_baudrate);
 
 	auto device = get_parameter("serial_name").as_string();
@@ -117,13 +133,7 @@ void slcan_node::close_serial_port()
 
 void slcan_node::send(const std::string& data)
 {
-	if(write(m_fd, data.c_str(), data.length()) == -1) 
-	{
-		RCLCPP_ERROR(this->get_logger(), "failed to write");
-		uart_fail_publish();
-	}
-	else 
-	{}
+	global::messages.push(data);
 }
 
 void slcan_node::recv_timer_callback()
@@ -135,9 +145,18 @@ void slcan_node::recv_timer_callback()
 		return ;
 	}
 	
-	char buff[256];
+	constexpr size_t buffer_size = 27;
+	char buff[buffer_size];
 
-	int n = read(m_fd, buff, 256);
+	size_t available_size = 0;
+
+	ioctl(m_fd, FIONREAD, &available_size);
+
+	if(buffer_size > available_size) 
+		return ;
+	
+
+	int n = read(m_fd, buff, buffer_size);
 	if(n > 0) 
 	{
 		std::string recv_data(buff, n);
@@ -200,7 +219,7 @@ can_msgs::msg::CanMsg slcan_node::decode_data(const std::string &data)
 	bool is_remote;
 	bool is_extended;
 
-	switch(data.size())
+	switch(data[0])
 	{
 	case 'T':
 	{
@@ -242,13 +261,13 @@ can_msgs::msg::CanMsg slcan_node::decode_data(const std::string &data)
 	{
 		uint dlc = 8;
 		msg.is_extended = true;
-		msg.id = std::stoul(data.substr(0, dlc), nullptr, 16);
+		msg.id = std::stoul(data.substr(1, dlc), nullptr, 16);
 	}
 	else
 	{
 		uint dlc = 3;
-        msg.is_extended = false;
-        msg.id = std::stoul(data.substr(0, dlc), nullptr, 16);
+		msg.is_extended = false;
+		msg.id = std::stoul(data.substr(1, dlc), nullptr, 16);
 	}
 
 	if (not is_remote)
@@ -269,5 +288,46 @@ can_msgs::msg::CanMsg slcan_node::decode_data(const std::string &data)
 void slcan_node::sub_callback(const can_msgs::msg::CanMsg::SharedPtr msg) 
 {
 	auto data = encode_data(*msg);
+
 	send(data);
+
+	auto data_msg = decode_data(data);
+
+	if(msg->data.size() == 4 && 0x00010000 & data_msg.id)
+	{
+		uint32_t data = 0;
+		for(uint32_t i = 0; i < msg->data.size(); i++)
+		{
+			data |= data_msg.data[i] << (8*i);
+		}
+		auto f = std::bit_cast<float>(data);
+		RCLCPP_INFO(this->get_logger(), "msg: {id: %d ,data: %f}", data_msg.id, f);
+	}
+	
+}
+
+void Write(const int fd)
+{
+	RCLCPP_INFO(rclcpp::get_logger("write"), "write");
+	while(rclcpp::ok())
+	{
+		if(global::messages.size() > 0)
+		{
+			auto msg = global::messages.front();
+			
+			int ret = ::write(fd, msg.c_str(), msg.size());
+			
+			if(ret != -1)
+			{
+				global::messages.pop();
+				RCLCPP_INFO(rclcpp::get_logger("write"), "length: %d", global::messages.size());
+				RCLCPP_INFO(rclcpp::get_logger("write"), "send %s", msg.c_str());
+			}
+		}
+
+		std::this_thread::sleep_for(100us);
+
+		if(global::terminate)
+			return;
+	}
 }

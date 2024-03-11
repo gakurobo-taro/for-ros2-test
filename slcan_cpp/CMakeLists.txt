@@ -23,6 +23,9 @@ ament_target_dependencies(
   "can_msgs"
 )
 
+find_package(Threads REQUIRED)
+target_link_libraries(slcan Threads::Threads)
+
 install(TARGETS slcan
   DESTINATION lib/${PROJECT_NAME})
 
