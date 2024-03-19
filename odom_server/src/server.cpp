@@ -11,8 +11,8 @@
 #include "odom_interface/srv/odom_srv.hpp"
 #include "can_msgs/msg/can_msg.hpp"
 
-inline static const std::array<uint32_t, 3> wheel_ids {0x01200100, 0x01200000, 0x01200200};
-inline static const std::array<uint32_t, 3> steer_ids {0x01210100, 0x01210000, 0x01210200};
+inline static const std::array<uint32_t, 3> wheel_ids {0x00200100, 0x00200000, 0x00200200};
+inline static const std::array<uint32_t, 3> steer_ids {0x00210100, 0x00210000, 0x00210200};
 
 class odom_server : public rclcpp::Node
 {
@@ -20,7 +20,7 @@ class odom_server : public rclcpp::Node
 	rclcpp::Subscription<can_msgs::msg::CanMsg>::SharedPtr m_can_subscriber;
 
 	odom_interface::srv::OdomSrv::Response m_odom_srv_response;
-	std::bitset<6> m_odom_srv_response_ready = false;
+	std::bitset<6> m_odom_srv_response_ready = 0;
 
 	std::vector<uint32_t> m_ids;
 
@@ -32,7 +32,7 @@ public:
             std::bind(&odom_server::odom_callback, this, std::placeholders::_1, std::placeholders::_2));
 
         m_can_subscriber = this->create_subscription<can_msgs::msg::CanMsg>(
-            "can_subscriber", 10, std::bind(&odom_server::can_callback, this, std::placeholders::_1));
+            "slcan_recv", 10, std::bind(&odom_server::can_callback, this, std::placeholders::_1));
 
 		constexpr uint32_t spd = 0x20;
 		constexpr uint32_t pos = 0x30;
@@ -48,40 +48,53 @@ public:
 		{
 			ids.push_back(id | pos);
 		}
+
+		m_ids = std::move(ids);
 	}
 
 private:
-    void odom_callback(const odom_interface::srv::OdomSrv::Request::SharedPtr request, odom_interface::srv::OdomSrv::Response::SharedPtr response)
+    odom_interface::srv::OdomSrv::Response::SharedPtr odom_callback(const odom_interface::srv::OdomSrv::Request::SharedPtr request, odom_interface::srv::OdomSrv::Response::SharedPtr response)
 	{
 		if(not request->req)
 		{
 			response->available = false;
-            return;
+			RCLCPP_WARN(this->get_logger(), "odom_service request not available");
+            return nullptr;
 		}
 
 		if(not m_odom_srv_response_ready.all())
 		{
+			response->available = false;
 			RCLCPP_WARN(this->get_logger(), "odom_srv_response not ready yet");
-			return;
+			return nullptr;
 		}
 
-		auto res = std::make_shared<odom_interface::srv::OdomSrv::Response>(m_odom_srv_response);
+		*response = m_odom_srv_response;
 
-		response = res;
+		response->available = true;
+
+		RCLCPP_INFO(this->get_logger(), "response");
+
+		return response;
 	}
 
 	void can_callback(const can_msgs::msg::CanMsg::SharedPtr msg)
 	{
 		int ret = 0;
+		bool is_truth_id = false;
+
+		auto check_id = msg->id & ~0x0F000000;
+
 		for(uint i = 0; i < m_ids.size(); i++)
 		{
-			if(msg->id == m_ids[i])
+			if(check_id == m_ids[i])
 			{
+				is_truth_id = true;
 				ret = i;
 			}
 		}
 
-		if(ret == 0)
+		if(not is_truth_id)
 		{
 			return;
 		}
@@ -92,7 +105,7 @@ private:
 
 		for(int i = 0; i < 4; i++)
 		{
-			tmp += (msg->data[i] << (24 - (i * 8)));
+			tmp += (msg->data[i] << ((i * 8)));
 		}
 
 		if(ret < 3)
@@ -104,6 +117,8 @@ private:
 		{
 			m_odom_srv_response.steer[ret-3] = std::bit_cast<float>(tmp);
 		}
+
+		RCLCPP_INFO(this->get_logger(), "odom_srv_response ready: %s", m_odom_srv_response_ready.to_string().c_str());
 	}
 };
 
