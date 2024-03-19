@@ -2,3 +2,4 @@
 can_msgs/
 ros2-uart-communicator/
 converter/
+ros2-slcan-py/
