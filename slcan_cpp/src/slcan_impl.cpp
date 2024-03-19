@@ -4,12 +4,6 @@
 
 using namespace std::chrono_literals;
 
-namespace global
-{
-	bool terminate = false;
-	std::queue<std::string> messages;
-}
-
 slcan_node::slcan_node() : rclcpp::Node("slcan_node")
 {
 	auto param_slcan_topic_name = rcl_interfaces::msg::ParameterDescriptor{};
@@ -27,10 +21,6 @@ slcan_node::slcan_node() : rclcpp::Node("slcan_node")
 
 	if(not is_open)
 		return;
-	
-	m_write = std::thread(std::bind(Write, m_fd));
-	
-	//m_write.join();
 
 	RCLCPP_INFO(this->get_logger(), "config ok");
 
@@ -41,9 +31,6 @@ slcan_node::~slcan_node()
 {
 	send("C\r");
 
-//	while(global::messages.size() > 0);
-
-	global::terminate = true;
 	this->close_serial_port();
 }
 
@@ -127,13 +114,17 @@ bool slcan_node::open_serial_port()
 
 void slcan_node::close_serial_port()
 {
+	tcdrain(m_fd);
+
 	if(m_fd < 0)
 		close(m_fd);
 }
 
 void slcan_node::send(const std::string& data)
 {
-	global::messages.push(data);
+	tcdrain(m_fd);
+	
+	int ret = ::write(m_fd, data.c_str(), data.size());
 }
 
 void slcan_node::recv_timer_callback()
@@ -145,22 +136,13 @@ void slcan_node::recv_timer_callback()
 		return ;
 	}
 	
-	constexpr size_t buffer_size = 27;
+	constexpr size_t buffer_size = 19;
 	char buff[buffer_size];
-
-	size_t available_size = 0;
-
-	ioctl(m_fd, FIONREAD, &available_size);
-
-	if(buffer_size > available_size) 
-		return ;
-	
 
 	int n = read(m_fd, buff, buffer_size);
 	if(n > 0) 
 	{
 		std::string recv_data(buff, n);
-		RCLCPP_INFO(this->get_logger(), "recv %s", recv_data.c_str());
 
 		auto msg = decode_data(recv_data);
 
@@ -293,7 +275,7 @@ void slcan_node::sub_callback(const can_msgs::msg::CanMsg::SharedPtr msg)
 
 	auto data_msg = decode_data(data);
 
-	if(msg->data.size() == 4 && 0x00010000 & data_msg.id)
+	if(msg->data.size() == 4)
 	{
 		uint32_t data = 0;
 		for(uint32_t i = 0; i < msg->data.size(); i++)
@@ -301,33 +283,7 @@ void slcan_node::sub_callback(const can_msgs::msg::CanMsg::SharedPtr msg)
 			data |= data_msg.data[i] << (8*i);
 		}
 		auto f = std::bit_cast<float>(data);
-		RCLCPP_INFO(this->get_logger(), "msg: {id: %d ,data: %f}", data_msg.id, f);
+		RCLCPP_INFO(this->get_logger(), "msg: {id: %x ,data: %f}", data_msg.id, f);
 	}
 	
-}
-
-void Write(const int fd)
-{
-	RCLCPP_INFO(rclcpp::get_logger("write"), "write");
-	while(rclcpp::ok())
-	{
-		if(global::messages.size() > 0)
-		{
-			auto msg = global::messages.front();
-			
-			int ret = ::write(fd, msg.c_str(), msg.size());
-			
-			if(ret != -1)
-			{
-				global::messages.pop();
-				RCLCPP_INFO(rclcpp::get_logger("write"), "length: %d", global::messages.size());
-				RCLCPP_INFO(rclcpp::get_logger("write"), "send %s", msg.c_str());
-			}
-		}
-
-		std::this_thread::sleep_for(100us);
-
-		if(global::terminate)
-			return;
-	}
 }
