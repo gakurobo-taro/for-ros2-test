@@ -30,12 +30,12 @@ class imu_estimator : public rclcpp::Node
 public:
 	imu_estimator() : Node("imu_estimator")
 	{
-		constexpr double dt = 1.0 / 4.0;
+		constexpr double dt = 1.0 / 100.0;
 
 		m_imu_sub = this->create_subscription<sensor_msgs::msg::Imu>(
 			"imu", 10, std::bind(&imu_estimator::imu_callback, this, std::placeholders::_1));
 
-		m_timer = this->create_wall_timer(100ms, std::bind(&imu_estimator::timer_callback, this));
+		m_timer = this->create_wall_timer(10ms, std::bind(&imu_estimator::timer_callback, this));
 
 		m_euler_estimate = Eigen::Vector3d::Zero();
 		m_P_estimate = 0.0174 * dt * dt * Eigen::Matrix3d::Identity();
@@ -49,7 +49,7 @@ private:
 
 	void timer_callback()
 	{
-		constexpr double dt = 1. / 10.;
+		constexpr double dt = 1. / 100.;
 
 		const double phi = m_euler_estimate(0);
 		const double theta = m_euler_estimate(1);
@@ -59,9 +59,9 @@ private:
 
 		geometry_msgs::msg::Vector3 euler_from_quaternion;
 
-		euler_from_quaternion.x = atan2(2 * (m_imu_msg.orientation.w * m_imu_msg.orientation.x - m_imu_msg.orientation.y * m_imu_msg.orientation.z), 2 * (m_imu_msg.orientation.w * m_imu_msg.orientation.w + m_imu_msg.orientation.z * m_imu_msg.orientation.z) - 1);
-		euler_from_quaternion.y = asin(2 * (m_imu_msg.orientation.w * m_imu_msg.orientation.y + m_imu_msg.orientation.x * m_imu_msg.orientation.z));
-		euler_from_quaternion.z = atan2(2 * (m_imu_msg.orientation.w * m_imu_msg.orientation.z - m_imu_msg.orientation.x * m_imu_msg.orientation.y), 2 * (m_imu_msg.orientation.w * m_imu_msg.orientation.w + m_imu_msg.orientation.x * m_imu_msg.orientation.x) - 1);
+		euler_from_quaternion.x = atan2(2. * (m_imu_msg.orientation.w * m_imu_msg.orientation.x - m_imu_msg.orientation.y * m_imu_msg.orientation.z), 2. * (m_imu_msg.orientation.w * m_imu_msg.orientation.w + m_imu_msg.orientation.z * m_imu_msg.orientation.z) - 1.);
+		euler_from_quaternion.y = asin(2. * (m_imu_msg.orientation.w * m_imu_msg.orientation.y + m_imu_msg.orientation.x * m_imu_msg.orientation.z));
+		euler_from_quaternion.z = atan2(2. * (m_imu_msg.orientation.w * m_imu_msg.orientation.z - m_imu_msg.orientation.x * m_imu_msg.orientation.y), 2. * (m_imu_msg.orientation.w * m_imu_msg.orientation.w + m_imu_msg.orientation.x * m_imu_msg.orientation.x) - 1.);
 
 		Eigen::Vector3d u;
 
