@@ -100,7 +100,7 @@ private:
 		
 		Eigen::Matrix<double, 3, 6> kinematics_matrix;
 
-		constexpr double div = 1.0 / 3.0;
+		static constinit const double div = 1.0 / 3.0;
 
 		RCLCPP_INFO(this->get_logger(), "odom_xy_velocity: w1: {%lf, %lf}, w2: {%lf, %lf}, w3: {%lf, %lf}",
 			odom_xy_velocity(0), odom_xy_velocity(1), odom_xy_velocity(2),
