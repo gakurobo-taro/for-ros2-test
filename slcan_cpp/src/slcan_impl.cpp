@@ -24,11 +24,13 @@ slcan_node::slcan_node() : rclcpp::Node("slcan_node")
 
 	RCLCPP_INFO(this->get_logger(), "config ok");
 
+	::tcdrain(m_fd);
 	send("O\r");
 }
 
 slcan_node::~slcan_node()
 {
+	::tcdrain(m_fd);
 	send("C\r");
 
 	this->close_serial_port();
@@ -125,13 +127,19 @@ void slcan_node::send(const std::string& data)
 	tcdrain(m_fd);
 	
 	int ret = ::write(m_fd, data.c_str(), data.size());
+#if SHOW_SENDING_MSG
+	RCLCPP_INFO(this->get_logger(), "send: %s", data.c_str());
+#endif // SHOW_SENDING
 }
 
 void slcan_node::recv_timer_callback()
 {
 	if(m_fd < 0) 
 	{
+	#if SHOW_SENDING_ERROR
 		RCLCPP_ERROR(this->get_logger(), "serial port is not open");
+	#endif // SHOW_SENDING_ERROR
+
 		uart_fail_publish();
 		return ;
 	}
@@ -140,11 +148,15 @@ void slcan_node::recv_timer_callback()
 	char buff[buffer_size];
 
 	int n = read(m_fd, buff, buffer_size);
-	if(n > 0) 
+	if(n > 0)
 	{
 		std::string recv_data(buff, n);
 
 		auto msg = decode_data(recv_data);
+
+		msg.header.stamp = this->get_clock()->now();
+
+		msg.header.frame_id = "slcan";
 
 		m_pub_data->publish(msg);
 	}
@@ -283,7 +295,10 @@ void slcan_node::sub_callback(const can_msgs::msg::CanMsg::SharedPtr msg)
 			data |= data_msg.data[i] << (8*i);
 		}
 		auto f = std::bit_cast<float>(data);
+
+	#if SHOW_SUBSCRIPTION
 		RCLCPP_INFO(this->get_logger(), "msg: {id: %x ,data: %f}", data_msg.id, f);
+	#endif // SHOW_SUBSCRIPTION
 	}
 	
 }
