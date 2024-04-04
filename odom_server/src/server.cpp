@@ -34,8 +34,8 @@ public:
         m_can_subscriber = this->create_subscription<can_msgs::msg::CanMsg>(
             "slcan_recv", 10, std::bind(&odom_server::can_callback, this, std::placeholders::_1));
 
-		constexpr uint32_t spd = 0x20;
-		constexpr uint32_t pos = 0x30;
+		static const constinit uint32_t spd = 0x20;
+		static const constinit uint32_t pos = 0x30;
 
 		std::vector<uint32_t> ids;
 
@@ -53,7 +53,17 @@ public:
 	}
 
 private:
-    odom_interface::srv::OdomSrv::Response::SharedPtr odom_callback(const odom_interface::srv::OdomSrv::Request::SharedPtr request, odom_interface::srv::OdomSrv::Response::SharedPtr response)
+	/**
+	 * @brief ros2 service callback function.
+	 * You can't call this function!!!
+	 * 
+	 * @param request 
+	 * @param response 
+	 * @return odom_interface::srv::OdomSrv::Response::SharedPtr 
+	 */
+    odom_interface::srv::OdomSrv::Response::SharedPtr odom_callback(
+		const odom_interface::srv::OdomSrv::Request::SharedPtr request, 
+		odom_interface::srv::OdomSrv::Response::SharedPtr response)
 	{
 		if(not request->req)
 		{
@@ -78,6 +88,11 @@ private:
 		return response;
 	}
 
+	/**
+	 * @brief sub callback function
+	 * 
+	 * @param msg 
+	 */
 	void can_callback(const can_msgs::msg::CanMsg::SharedPtr msg)
 	{
 		int ret = 0;
