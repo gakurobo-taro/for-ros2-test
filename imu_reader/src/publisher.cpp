@@ -53,7 +53,7 @@ private:
 		if(m_buffer.empty())
 		    return;
 
-		if(m_buffer.front().substr(0, 2) == "I1")
+		if(m_buffer.front().substr(0, 2) == "I0")
 			return;
 		
 	    // RCLCPP_INFO(this->get_logger(), "%s", m_buffer.front().substr());
@@ -67,7 +67,11 @@ private:
 			auto imu_msg = sensor_msgs::msg::Imu();
 
 			imu_msg.header.stamp = this->now();
-			imu_msg.header.frame_id = "imu";
+
+			if(tmp_string.substr(0, 3) == "II0")
+				imu_msg.header.frame_id = "imu0";
+			if(tmp_string.substr(0, 3) == "II1")
+			    imu_msg.header.frame_id = "imu1";
 
 			double acc[3];
 			double gyro[3];
