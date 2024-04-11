@@ -24,6 +24,13 @@ class odom_server : public rclcpp::Node
 
 	std::vector<uint32_t> m_ids;
 
+	static constexpr std::array<double, 3> m_bias = 
+		{
+			3.0629, 
+			3.922223, 
+			2.92990
+		};
+
 public:
 	odom_server() : Node("odom_server")
 	{
@@ -35,7 +42,7 @@ public:
             "slcan_recv", 10, std::bind(&odom_server::can_callback, this, std::placeholders::_1));
 
 		static const constinit uint32_t spd = 0x20;
-		static const constinit uint32_t pos = 0x30;
+		static const constinit uint32_t pos = 0x36;
 
 		std::vector<uint32_t> ids;
 
@@ -130,7 +137,7 @@ private:
 
 		if(ret >= 3)
 		{
-			m_odom_srv_response.steer[ret-3] = std::bit_cast<float>(tmp);
+			m_odom_srv_response.steer[ret-3] = (std::bit_cast<float>(tmp) - m_bias[ret-3]) / 3.0;
 		}
 
 		RCLCPP_INFO(this->get_logger(), "odom_srv_response ready: %s", m_odom_srv_response_ready.to_string().c_str());

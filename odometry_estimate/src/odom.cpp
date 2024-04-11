@@ -35,11 +35,18 @@ class odometry_node : public rclcpp::Node
 	};
 
 	/// @brief  unit is mks
-	std::array<xy_t, 3> m_odom_wheel_pos = 
+	constexpr static std::array<xy_t, 3> m_odom_wheel_pos = 
 		{{
-			{0.207, 0.0},
-			{0.103,  0.245},
-			{0.103, -0.245}
+			{ 0.1033333, -0.245},
+			{ 0.1033333,  0.245},
+			{-0.2066667,  0.0},
+			
+		}};
+	constexpr static std::array<double, 3> m_odom_steer_theta = 
+		{{
+			std::atan2( 0.1033333, -0.245),
+			std::atan2( 0.1033333,  0.245),
+			std::atan2(-0.2066667,  0.0),
 		}};
 
 public:
@@ -81,9 +88,9 @@ private:
 			return;
 		}
 
-		RCLCPP_INFO(this->get_logger(), "odom data: steer:{%lf, %lf, %lf}, wheel:{%lf, %lf, %lf}", 
-			m_odom_response->steer[0], m_odom_response->steer[1], m_odom_response->steer[2], 
-			m_odom_response->wheel[0], m_odom_response->wheel[1], m_odom_response->wheel[2]);
+		// RCLCPP_INFO(this->get_logger(), "odom data: steer:{%lf, %lf, %lf}, wheel:{%lf, %lf, %lf}", 
+		// 	m_odom_response->steer[0], m_odom_response->steer[1], m_odom_response->steer[2], 
+		// 	m_odom_response->wheel[0], m_odom_response->wheel[1], m_odom_response->wheel[2]);
 
 		Eigen::Vector<double, 6> odom_xy_velocity;
 
@@ -109,12 +116,12 @@ private:
 		kinematics_matrix <<
             div, 0., div, 0., div, 0.,
 			0., div, 0., div, 0., div,
-			-div * (m_odom_wheel_pos[0].x * cos(m_odom_pose->theta) + m_odom_wheel_pos[0].y * sin(m_odom_pose->theta)),
-			 div * (m_odom_wheel_pos[0].x * sin(m_odom_pose->theta) - m_odom_wheel_pos[0].y * cos(m_odom_pose->theta)),
-			-div * (m_odom_wheel_pos[1].x * cos(m_odom_pose->theta) + m_odom_wheel_pos[1].y * sin(m_odom_pose->theta)),
-			 div * (m_odom_wheel_pos[1].x * sin(m_odom_pose->theta) - m_odom_wheel_pos[1].y * cos(m_odom_pose->theta)),
-			-div * (m_odom_wheel_pos[2].x * cos(m_odom_pose->theta) + m_odom_wheel_pos[2].y * sin(m_odom_pose->theta)),
-			 div * (m_odom_wheel_pos[2].x * sin(m_odom_pose->theta) - m_odom_wheel_pos[2].y * cos(m_odom_pose->theta));
+			div * div *  std::sin(this->m_odom_steer_theta[0]) / wheel_radius / 2.,
+			div * div * -std::cos(this->m_odom_steer_theta[0]) / wheel_radius / 2.,
+			div * div *  std::sin(this->m_odom_steer_theta[1]) / wheel_radius / 2.,
+			div * div * -std::cos(this->m_odom_steer_theta[1]) / wheel_radius / 2.,
+			div * div *  std::sin(this->m_odom_steer_theta[2]) / wheel_radius / 2.,
+			div * div * -std::cos(this->m_odom_steer_theta[2]) / wheel_radius / 2.;
 		
 
 		auto xy_theta_velocity = kinematics_matrix * odom_xy_velocity;
