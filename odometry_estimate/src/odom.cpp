@@ -6,8 +6,9 @@
 #include <rclcpp/rclcpp.hpp>
 #include <geometry_msgs/msg/twist.hpp>
 #include <geometry_msgs/msg/pose2_d.hpp>
+#include "geometry_msgs/msg/transform_stamped.hpp"
 
-
+#include "tf2/LinearMath/Quaternion.h"
 #include <tf2_ros/transform_broadcaster.h>
 
 #include <eigen3/Eigen/Core>
@@ -28,6 +29,8 @@ class odometry_node : public rclcpp::Node
 	
 	geometry_msgs::msg::Pose2D::SharedPtr m_odom_pose;	
 
+	std::unique_ptr<tf2_ros::TransformBroadcaster> m_odom_tf_broadcaster;
+
 	struct xy_t
 	{
 		double x;
@@ -42,6 +45,12 @@ class odometry_node : public rclcpp::Node
 			{-0.2066667,  0.0},
 			
 		}};
+	constexpr static std::array<double, 3> m_odom_steer_radius = 
+		{{
+			std::hypot( 0.1033333, -0.245),
+			std::hypot( 0.1033333,  0.245),
+			std::hypot(-0.2066667,  0.0),
+		}};
 	constexpr static std::array<double, 3> m_odom_steer_theta = 
 		{{
 			std::atan2( 0.1033333, -0.245),
@@ -53,7 +62,7 @@ public:
 	odometry_node() : Node("odometry_node")
 	{
 		m_odom_client = this->create_client<odom_interface::srv::OdomSrv>("odom_service");
-        m_twist_pub = this->create_publisher<geometry_msgs::msg::Twist>("cmd_vel", 10);
+        m_twist_pub = this->create_publisher<geometry_msgs::msg::Twist>("odom_velocity", 10);
 
         m_timer = this->create_wall_timer(100ms, std::bind(&odometry_node::timer_callback, this));
 		m_request_timer = this->create_wall_timer(100ms, std::bind(&odometry_node::request_timer_callback, this));
@@ -62,6 +71,8 @@ public:
 		m_odom_pose->x = 0.0;
         m_odom_pose->y = 0.0;
 		m_odom_pose->theta = 0.0;
+
+		m_odom_tf_broadcaster = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
 
 		m_odom_response = nullptr;
 	}
@@ -72,7 +83,7 @@ private:
 #define ESTIMATED 0
 
 #if not ESTIMATED
-		constexpr double dt = 1. / 10.;
+		constexpr double dt = 1. / 100.;
 
 		if (not m_odom_response)
 		{
@@ -109,22 +120,31 @@ private:
 
 		static constinit const double div = 1.0 / 3.0;
 
-		RCLCPP_INFO(this->get_logger(), "odom_xy_velocity: w1: {%lf, %lf}, w2: {%lf, %lf}, w3: {%lf, %lf}",
+		RCLCPP_INFO(this->get_logger(), "abs_enc: {%5lf, %5lf, %5lf}", m_odom_response->steer[0], m_odom_response->steer[1], m_odom_response->steer[2]);
+		RCLCPP_INFO(this->get_logger(), "odom_xy_velocity: w1: {%5lf, %5lf}, w2: {%5lf, %5lf}, w3: {%5lf, %5lf}",
 			odom_xy_velocity(0), odom_xy_velocity(1), odom_xy_velocity(2),
 			odom_xy_velocity(3), odom_xy_velocity(4), odom_xy_velocity(5));
 
 		kinematics_matrix <<
             div, 0., div, 0., div, 0.,
 			0., div, 0., div, 0., div,
-			div * div *  std::sin(this->m_odom_steer_theta[0]) / wheel_radius / 2.,
-			div * div * -std::cos(this->m_odom_steer_theta[0]) / wheel_radius / 2.,
-			div * div *  std::sin(this->m_odom_steer_theta[1]) / wheel_radius / 2.,
-			div * div * -std::cos(this->m_odom_steer_theta[1]) / wheel_radius / 2.,
-			div * div *  std::sin(this->m_odom_steer_theta[2]) / wheel_radius / 2.,
-			div * div * -std::cos(this->m_odom_steer_theta[2]) / wheel_radius / 2.;
+			div *  std::sin(this->m_odom_steer_theta[0]) / m_odom_steer_radius[0],
+			div * -std::cos(this->m_odom_steer_theta[0]) / m_odom_steer_radius[0],
+			div *  std::sin(this->m_odom_steer_theta[1]) / m_odom_steer_radius[1],
+			div * -std::cos(this->m_odom_steer_theta[1]) / m_odom_steer_radius[1],
+			div *  std::sin(this->m_odom_steer_theta[2]) / m_odom_steer_radius[2],
+			div * -std::cos(this->m_odom_steer_theta[2]) / m_odom_steer_radius[2];
 		
 
 		auto xy_theta_velocity = kinematics_matrix * odom_xy_velocity;
+
+		Eigen::Matrix3d rotation_matrix;
+		rotation_matrix <<
+			cos(m_odom_pose->theta), -sin(m_odom_pose->theta), 0,
+			sin(m_odom_pose->theta),  cos(m_odom_pose->theta), 0,
+			0                      , 0                       , 1;
+
+		auto truth_velocity = rotation_matrix * xy_theta_velocity;
 
 		m_odom_pose->x += xy_theta_velocity(0) * dt;
 		m_odom_pose->y += xy_theta_velocity(1) * dt;
@@ -135,8 +155,29 @@ private:
 		twist_msg->linear.y = xy_theta_velocity(1);
 		twist_msg->angular.z = xy_theta_velocity(2);
 		
-		RCLCPP_INFO(this->get_logger(), "x: %lf, y: %lf, theta: %lf", m_odom_pose->x, m_odom_pose->y, m_odom_pose->theta);
+		RCLCPP_INFO(this->get_logger(), "vx: %5lf, vy: %5lf, vz: %5lf", xy_theta_velocity(0), xy_theta_velocity(1), xy_theta_velocity(2));
+		RCLCPP_INFO(this->get_logger(), "tvx: %5lf, tvy: %5lf, tvz: %5lf", truth_velocity(0), truth_velocity(1), truth_velocity(2));
+		RCLCPP_INFO(this->get_logger(), "x: %5lf, y: %5lf, theta: %5lf", m_odom_pose->x, m_odom_pose->y, m_odom_pose->theta);
 		m_twist_pub->publish(*twist_msg);
+
+		geometry_msgs::msg::TransformStamped tf_msg;
+		tf_msg.header.stamp = this->now();
+		tf_msg.header.frame_id = "odometry";
+		tf_msg.child_frame_id = "base_footprint";
+
+		tf_msg.transform.translation.x = m_odom_pose->x;
+		tf_msg.transform.translation.y = m_odom_pose->y;
+		tf_msg.transform.translation.z = 0.0;
+
+		tf2::Quaternion q;
+		q.setRPY(0, 0, m_odom_pose->theta);
+
+		tf_msg.transform.rotation.x = q.getX();
+		tf_msg.transform.rotation.y = q.getY();
+		tf_msg.transform.rotation.z = q.getZ();
+		tf_msg.transform.rotation.w = q.getW();
+
+		m_odom_tf_broadcaster->sendTransform(tf_msg);
 
 		m_odom_response = nullptr;
 #endif // not ESTIMATED
