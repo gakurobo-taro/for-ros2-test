@@ -19,8 +19,8 @@ def generate_launch_description():
         ),
         Node(
             package='converter',
-            executable='steer2vel',
-            name='steer2vel',
+            executable='ctrler2vel',
+            name='ctrler2vel',
             output={
                 # 'stdout': 'screen',
                 'stderr': 'screen',
