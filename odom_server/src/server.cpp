@@ -26,9 +26,9 @@ class odom_server : public rclcpp::Node
 
 	static constexpr std::array<double, 3> m_bias = 
 		{
-			3.0629, 
-			3.922223, 
-			2.92990
+			3.10029,
+			2.897623,
+			2.710590
 		};
 
 public:
@@ -137,7 +137,7 @@ private:
 
 		if(ret >= 3)
 		{
-			m_odom_srv_response.steer[ret-3] = (std::bit_cast<float>(tmp) - m_bias[ret-3]) / 3.0;
+			m_odom_srv_response->steer[ret-3] = (std::bit_cast<float>(tmp) - m_bias[ret-3]) / 3.0;
 		}
 
 		RCLCPP_INFO(this->get_logger(), "odom_srv_response ready: %s", m_odom_srv_response_ready.to_string().c_str());
