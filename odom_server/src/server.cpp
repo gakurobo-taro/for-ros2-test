@@ -19,7 +19,7 @@ class odom_server : public rclcpp::Node
 	rclcpp::Service<odom_interface::srv::OdomSrv>::SharedPtr m_odom_service;
 	rclcpp::Subscription<can_msgs::msg::CanMsg>::SharedPtr m_can_subscriber;
 
-	odom_interface::srv::OdomSrv::Response m_odom_srv_response;
+	odom_interface::srv::OdomSrv::Response::SharedPtr m_odom_srv_response;
 	std::bitset<6> m_odom_srv_response_ready = 0;
 
 	std::vector<uint32_t> m_ids;
@@ -79,14 +79,16 @@ private:
             return nullptr;
 		}
 
-		if(not m_odom_srv_response_ready.all())
+		if(not m_odom_srv_response_ready.all() || not m_odom_srv_response)
 		{
 			response->available = false;
 			RCLCPP_WARN(this->get_logger(), "odom_srv_response not ready yet");
 			return nullptr;
 		}
 
-		*response = m_odom_srv_response;
+		*response = *m_odom_srv_response;
+
+		m_odom_srv_response = nullptr;
 
 		response->available = true;
 
@@ -102,6 +104,12 @@ private:
 	 */
 	void can_callback(const can_msgs::msg::CanMsg::SharedPtr msg)
 	{
+		if(not m_odom_srv_response)
+		{
+			m_odom_srv_response = std::make_shared<odom_interface::srv::OdomSrv::Response>();
+            m_odom_srv_response->available = false;
+		}
+
 		int ret = 0;
 		bool is_truth_id = false;
 
@@ -132,7 +140,7 @@ private:
 
 		if(ret < 3)
 		{
-			m_odom_srv_response.wheel[ret] = std::bit_cast<float>(tmp);
+			m_odom_srv_response->wheel[ret] = std::bit_cast<float>(tmp);
 		}
 
 		if(ret >= 3)
