@@ -146,14 +146,14 @@ private:
 
 		auto truth_velocity = rotation_matrix * xy_theta_velocity;
 
-		m_odom_pose->x += xy_theta_velocity(0) * dt;
-		m_odom_pose->y += xy_theta_velocity(1) * dt;
-		m_odom_pose->theta += xy_theta_velocity(2) * dt;
+		m_odom_pose->x += truth_velocity(0) * dt * 10;
+		m_odom_pose->y += truth_velocity(1) * dt * 10;
+		m_odom_pose->theta += truth_velocity(2) * dt * 10;
 
 		auto twist_msg = std::make_shared<geometry_msgs::msg::Twist>();
-		twist_msg->linear.x = xy_theta_velocity(0);
-		twist_msg->linear.y = xy_theta_velocity(1);
-		twist_msg->angular.z = xy_theta_velocity(2);
+		twist_msg->linear.x = truth_velocity(0);
+		twist_msg->linear.y = truth_velocity(1);
+		twist_msg->angular.z = truth_velocity(2);
 		
 		RCLCPP_INFO(this->get_logger(), "vx: %5lf, vy: %5lf, vz: %5lf", xy_theta_velocity(0), xy_theta_velocity(1), xy_theta_velocity(2));
 		RCLCPP_INFO(this->get_logger(), "tvx: %5lf, tvy: %5lf, tvz: %5lf", truth_velocity(0), truth_velocity(1), truth_velocity(2));
