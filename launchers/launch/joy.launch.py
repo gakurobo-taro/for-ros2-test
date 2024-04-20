@@ -44,4 +44,14 @@ def generate_launch_description():
         #     ]
         # ),
         
+        Node(
+            package='remote_emergency_stop',
+            executable='res',
+            name='remote_emergency_stop',
+            output={
+                # 'stdout': 'screen',
+                'stderr': 'screen',
+                },
+        )
+        
     ])

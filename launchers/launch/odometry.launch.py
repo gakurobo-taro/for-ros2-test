@@ -7,10 +7,10 @@ def generate_launch_description():
             package='odom_server',
             executable='server',
             name='odom_server',
-            output={
-                # 'stdout': 'screen',
-                'stderr': 'screen',      
-            }
+            # output={
+            #     # 'stdout': 'screen',
+            #     'stderr': 'screen',      
+            # }
         ),
         Node(
             package='odometry_estimate',
