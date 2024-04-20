@@ -68,9 +68,9 @@ private:
 
 			imu_msg.header.stamp = this->now();
 
-			if(tmp_string.substr(0, 3) == "II0")
+			if(tmp_string.substr(0, 3) == "I0")
 				imu_msg.header.frame_id = "imu0";
-			if(tmp_string.substr(0, 3) == "II1")
+			if(tmp_string.substr(0, 3) == "I1")
 			    imu_msg.header.frame_id = "imu1";
 
 			double acc[3];
@@ -103,20 +103,20 @@ private:
 				pos += msg_size + 1;
 			}
 
-			imu_msg.linear_acceleration.x = acc[0] * 9.8 / 16384.;
-			imu_msg.linear_acceleration.y = acc[1] * 9.8 / 16384.;
-			imu_msg.linear_acceleration.z = acc[2] * 9.8 / 16384.;
+			imu_msg.linear_acceleration.x = acc[0] / 100.;
+			imu_msg.linear_acceleration.y = acc[1] / 100.;
+			imu_msg.linear_acceleration.z = acc[2] / 100.;
 
-			RCLCPP_INFO(this->get_logger(), "acceleration: %f, %f, %f", 
-			imu_msg.linear_acceleration.x, imu_msg.linear_acceleration.y, imu_msg.linear_acceleration.z);
+			// RCLCPP_INFO(this->get_logger(), "acceleration: %f, %f, %f", 
+			// imu_msg.linear_acceleration.x, imu_msg.linear_acceleration.y, imu_msg.linear_acceleration.z);
 
-			imu_msg.angular_velocity.x = gyro[0] / 7505.;
-			imu_msg.angular_velocity.y = gyro[1] / 7505.;
-			imu_msg.angular_velocity.z = gyro[2] / 7505.;
+			imu_msg.angular_velocity.x = gyro[0] / 1000.;
+			imu_msg.angular_velocity.y = gyro[1] / 1000.;
+			imu_msg.angular_velocity.z = gyro[2] / 1000.;
 
 			m_imu_pub->publish(imu_msg);
 
-			RCLCPP_INFO(this->get_logger(), "received");
+			// RCLCPP_INFO(this->get_logger(), "received");
 		}
 		else
 		{

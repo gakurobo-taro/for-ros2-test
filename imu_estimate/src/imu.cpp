@@ -5,8 +5,8 @@
 #include <chrono>
 
 #include <rclcpp/rclcpp.hpp>
-#include <geometry_msgs/msg/pose_stamped.hpp>
 #include <sensor_msgs/msg/imu.hpp>
+#include <geometry_msgs/msg/vector3.hpp>
 
 #include <tf2/utils.h>
 
@@ -19,6 +19,7 @@ using namespace std::chrono_literals;
 class imu_estimator : public rclcpp::Node
 {
 	rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr m_imu_sub;
+	rclcpp::Publisher<geometry_msgs::msg::Vector3>::SharedPtr m_euler_pub;
 	
 	rclcpp::TimerBase::SharedPtr m_timer;
 
@@ -37,6 +38,9 @@ public:
 
 		m_timer = this->create_wall_timer(10ms, std::bind(&imu_estimator::timer_callback, this));
 
+		m_euler_pub = this->create_publisher<geometry_msgs::msg::Vector3>(
+			"imu_euler", 10);
+
 		m_euler_estimate = Eigen::Vector3d::Zero();
 		m_P_estimate = 0.0174 * dt * dt * Eigen::Matrix3d::Identity();
 	}
@@ -44,6 +48,8 @@ public:
 private:
 	void imu_callback(const sensor_msgs::msg::Imu::SharedPtr msg)
 	{
+		if(msg->header.frame_id == "imu0")
+			return;
 		m_imu_msg = *msg;
 	}
 
@@ -129,6 +135,13 @@ private:
 		RCLCPP_INFO(this->get_logger(), "prediction: %f %f %f", prediction_euler(0), prediction_euler(1), prediction_euler(2));
 		RCLCPP_INFO(this->get_logger(), "z: %f %f", z(0), z(1));
 		RCLCPP_INFO(this->get_logger(), "estimate: %f %f %f", m_euler_estimate(0), m_euler_estimate(1), m_euler_estimate(2));
+
+		geometry_msgs::msg::Vector3 euler_msg;
+		euler_msg.set__x(m_euler_estimate.x());
+		euler_msg.set__y(m_euler_estimate.y());
+		euler_msg.set__z(m_euler_estimate.z());
+
+		m_euler_pub->publish(euler_msg);
 	}
 };
 
