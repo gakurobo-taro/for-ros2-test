@@ -4,6 +4,7 @@
 #include <chrono>
 
 #include <rclcpp/rclcpp.hpp>
+#include <std_msgs/msg/bool.hpp>
 #include <geometry_msgs/msg/twist.hpp>
 #include <geometry_msgs/msg/pose2_d.hpp>
 #include "geometry_msgs/msg/transform_stamped.hpp"
@@ -21,6 +22,7 @@ class odometry_node : public rclcpp::Node
 {
 	rclcpp::Client<odom_interface::srv::OdomSrv>::SharedPtr m_odom_client;
 	rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr m_twist_pub;
+	rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr m_reset_sub;
 
 	rclcpp::TimerBase::SharedPtr m_timer;
 	rclcpp::TimerBase::SharedPtr m_request_timer;
@@ -63,13 +65,14 @@ public:
 	{
 		m_odom_client = this->create_client<odom_interface::srv::OdomSrv>("odom_service");
         m_twist_pub = this->create_publisher<geometry_msgs::msg::Twist>("odom_velocity", 10);
+		m_reset_sub = this->create_subscription<std_msgs::msg::Bool>("odom_reset", 10, std::bind(&odometry_node::reset_pose, this, std::placeholders::_1));
 
-        m_timer = this->create_wall_timer(10ms, std::bind(&odometry_node::timer_callback, this));
+        m_timer = this->create_wall_timer(50ms, std::bind(&odometry_node::timer_callback, this));
 		m_request_timer = this->create_wall_timer(10ms, std::bind(&odometry_node::request_timer_callback, this));
 
 		m_odom_pose = std::make_shared<geometry_msgs::msg::Pose2D>();
 		m_odom_pose->x = 0.0;
-        m_odom_pose->y = 0.0;
+		m_odom_pose->y = 0.0;
 		m_odom_pose->theta = 0.0;
 
 		m_odom_tf_broadcaster = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
@@ -83,7 +86,7 @@ private:
 #define ESTIMATED 0
 
 #if not ESTIMATED
-		constexpr double dt = 1. / 100.;
+		constexpr double dt = 1. / 20.;
 
 		if (not m_odom_response)
 		{
@@ -114,12 +117,15 @@ private:
             m_odom_response->wheel[1] * -sin(m_odom_response->steer[1]) * coeff,
             m_odom_response->wheel[1] *  cos(m_odom_response->steer[1]) * coeff,
 			m_odom_response->wheel[2] * -sin(m_odom_response->steer[2]) * coeff,
-            m_odom_response->wheel[2] *  cos(m_odom_response->steer[2]) * coeff;
+        	m_odom_response->wheel[2] *  cos(m_odom_response->steer[2]) * coeff;
 		
 		Eigen::Matrix<double, 3, 6> kinematics_matrix;
 
 		static constinit const double div = 1.0 / 3.0;
-
+		RCLCPP_INFO(this->get_logger(), "wheel: {%5lf, %5lf, %5lf}", 
+			std::hypot(odom_xy_velocity(0), odom_xy_velocity(1)), 
+			std::hypot(odom_xy_velocity(2), odom_xy_velocity(3)), 
+			std::hypot(odom_xy_velocity(4), odom_xy_velocity(5)));
 		RCLCPP_INFO(this->get_logger(), "abs_enc: {%5lf, %5lf, %5lf}", m_odom_response->steer[0], m_odom_response->steer[1], m_odom_response->steer[2]);
 		RCLCPP_INFO(this->get_logger(), "odom_xy_velocity: w1: {%5lf, %5lf}, w2: {%5lf, %5lf}, w3: {%5lf, %5lf}",
 			odom_xy_velocity(0), odom_xy_velocity(1), odom_xy_velocity(2),
@@ -148,7 +154,7 @@ private:
 
 		m_odom_pose->x +=xy_theta_velocity(0) * dt;
 		m_odom_pose->y += xy_theta_velocity(1) * dt;
-		m_odom_pose->theta += xy_theta_velocity(2) * dt;
+		// m_odom_pose->theta += xy_theta_velocity(2) * dt;
 
 		auto twist_msg = std::make_shared<geometry_msgs::msg::Twist>();
 		twist_msg->linear.x = xy_theta_velocity(0);
@@ -201,7 +207,7 @@ private:
 
 	void response_callback(const rclcpp::Client<odom_interface::srv::OdomSrv>::SharedFuture future)
 	{
-		std::future_status status = future.wait_for(10ms);
+		std::future_status status = future.wait_for(1ms);
 
 		if(status == std::future_status::timeout)
 		{
@@ -217,10 +223,20 @@ private:
 
 		if(future.get()->available)
 		{
-			RCLCPP_INFO(this->get_logger(), "response");
+			// RCLCPP_INFO(this->get_logger(), "response");
 			m_odom_response = future.get();
 		}
 			
+	}
+
+	void reset_pose(std_msgs::msg::Bool::SharedPtr msg)
+	{
+		if(msg->data)
+		{
+			m_odom_pose->x = 0.0;
+            m_odom_pose->y = 0.0;
+            m_odom_pose->theta = 0.0;
+		}
 	}
 };
 

@@ -90,6 +90,14 @@ private:
 
 		RCLCPP_INFO(this->get_logger(), "response");
 
+		m_odom_srv_response_ready.reset();
+
+		// std::swap(response->steer[0], response->steer[2]);
+		// std::swap(response->wheel[0], response->wheel[2]);
+
+		std::swap(response->steer[1], response->steer[0]);
+		std::swap(response->wheel[1], response->wheel[0]);
+
 		return response;
 	}
 
