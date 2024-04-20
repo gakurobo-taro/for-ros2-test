@@ -23,13 +23,14 @@ class odometry_node : public rclcpp::Node
 	rclcpp::Client<odom_interface::srv::OdomSrv>::SharedPtr m_odom_client;
 	rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr m_twist_pub;
 	rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr m_reset_sub;
+	rclcpp::Subscription<geometry_msgs::msg::Pose2D>::SharedPtr m_set_pose_sub;
 
 	rclcpp::TimerBase::SharedPtr m_timer;
 	rclcpp::TimerBase::SharedPtr m_request_timer;
 
 	odom_interface::srv::OdomSrv::Response::SharedPtr m_odom_response;
 	
-	geometry_msgs::msg::Pose2D::SharedPtr m_odom_pose;	
+	geometry_msgs::msg::Pose2D::SharedPtr m_odom_pose;
 
 	std::unique_ptr<tf2_ros::TransformBroadcaster> m_odom_tf_broadcaster;
 
@@ -65,7 +66,10 @@ public:
 	{
 		m_odom_client = this->create_client<odom_interface::srv::OdomSrv>("odom_service");
         m_twist_pub = this->create_publisher<geometry_msgs::msg::Twist>("odom_velocity", 10);
-		m_reset_sub = this->create_subscription<std_msgs::msg::Bool>("odom_reset", 10, std::bind(&odometry_node::reset_pose, this, std::placeholders::_1));
+		m_reset_sub = this->create_subscription<std_msgs::msg::Bool>(
+			"odom_reset", 10, std::bind(&odometry_node::reset_pose, this, std::placeholders::_1));
+		m_set_pose_sub = this->create_subscription<geometry_msgs::msg::Pose2D>(
+            "odom_set_pose", 10, std::bind(&odometry_node::set_pose, this, std::placeholders::_1));
 
         m_timer = this->create_wall_timer(50ms, std::bind(&odometry_node::timer_callback, this));
 		m_request_timer = this->create_wall_timer(10ms, std::bind(&odometry_node::request_timer_callback, this));
@@ -237,6 +241,13 @@ private:
             m_odom_pose->y = 0.0;
             m_odom_pose->theta = 0.0;
 		}
+	}
+
+	void set_pose(const geometry_msgs::msg::Pose2D::SharedPtr msg)
+	{
+		m_odom_pose->x = msg->x;
+        m_odom_pose->y = msg->y;
+        m_odom_pose->theta = msg->theta;
 	}
 };
 
