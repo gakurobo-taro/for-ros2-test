@@ -40,23 +40,23 @@ class odometry_node : public rclcpp::Node
 	/// @brief  unit is mks
 	constexpr static std::array<xy_t, 3> m_odom_wheel_pos = 
 		{{
-			{ 0.1033333, -0.245},
-			{ 0.1033333,  0.245},
-			{-0.2066667,  0.0},
+			{ -0.245,  0.1033333},
+			{  0.245,  0.1033333},
+			{  0.0  , -0.2066667},
 			
 		}};
 	constexpr static std::array<double, 3> m_odom_steer_radius = 
-		{{
-			std::hypot( 0.1033333, -0.245),
-			std::hypot( 0.1033333,  0.245),
-			std::hypot(-0.2066667,  0.0),
-		}};
+		{
+			std::hypot( -0.245,  0.1033333),
+			std::hypot(  0.245,  0.1033333),
+			std::hypot(  0.0  , -0.2066667),
+		};
 	constexpr static std::array<double, 3> m_odom_steer_theta = 
-		{{
-			std::atan2( 0.1033333, -0.245),
-			std::atan2( 0.1033333,  0.245),
-			std::atan2(-0.2066667,  0.0),
-		}};
+		{
+			std::atan2( -0.245,  0.1033333),
+			std::atan2(  0.245,  0.1033333),
+			std::atan2(  0.0  , -0.2066667),
+		};
 
 public:
 	odometry_node() : Node("odometry_node")
@@ -64,8 +64,8 @@ public:
 		m_odom_client = this->create_client<odom_interface::srv::OdomSrv>("odom_service");
         m_twist_pub = this->create_publisher<geometry_msgs::msg::Twist>("odom_velocity", 10);
 
-        m_timer = this->create_wall_timer(100ms, std::bind(&odometry_node::timer_callback, this));
-		m_request_timer = this->create_wall_timer(100ms, std::bind(&odometry_node::request_timer_callback, this));
+        m_timer = this->create_wall_timer(10ms, std::bind(&odometry_node::timer_callback, this));
+		m_request_timer = this->create_wall_timer(10ms, std::bind(&odometry_node::request_timer_callback, this));
 
 		m_odom_pose = std::make_shared<geometry_msgs::msg::Pose2D>();
 		m_odom_pose->x = 0.0;
@@ -146,14 +146,14 @@ private:
 
 		auto truth_velocity = rotation_matrix * xy_theta_velocity;
 
-		m_odom_pose->x += truth_velocity(0) * dt * 10;
-		m_odom_pose->y += truth_velocity(1) * dt * 10;
-		m_odom_pose->theta += truth_velocity(2) * dt * 10;
+		m_odom_pose->x +=xy_theta_velocity(0) * dt;
+		m_odom_pose->y += xy_theta_velocity(1) * dt;
+		m_odom_pose->theta += xy_theta_velocity(2) * dt;
 
 		auto twist_msg = std::make_shared<geometry_msgs::msg::Twist>();
-		twist_msg->linear.x = truth_velocity(0);
-		twist_msg->linear.y = truth_velocity(1);
-		twist_msg->angular.z = truth_velocity(2);
+		twist_msg->linear.x = xy_theta_velocity(0);
+		twist_msg->linear.y = xy_theta_velocity(1);
+		twist_msg->angular.z = xy_theta_velocity(2);
 		
 		RCLCPP_INFO(this->get_logger(), "vx: %5lf, vy: %5lf, vz: %5lf", xy_theta_velocity(0), xy_theta_velocity(1), xy_theta_velocity(2));
 		RCLCPP_INFO(this->get_logger(), "tvx: %5lf, tvy: %5lf, tvz: %5lf", truth_velocity(0), truth_velocity(1), truth_velocity(2));
