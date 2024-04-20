@@ -25,11 +25,7 @@ class odom_server : public rclcpp::Node
 	std::vector<uint32_t> m_ids;
 
 	static constexpr std::array<double, 3> m_bias = 
-		{
-			3.10029,
-			2.897623,
-			2.710590
-		};
+		{3.102, 2.955, 2.710590};
 
 public:
 	odom_server() : Node("odom_server")
