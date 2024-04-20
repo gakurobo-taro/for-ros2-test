@@ -5,6 +5,7 @@
 #include <chrono>
 
 #include <rclcpp/rclcpp.hpp>
+#include <std_msgs/msg/bool.hpp>
 #include <sensor_msgs/msg/imu.hpp>
 #include <geometry_msgs/msg/vector3.hpp>
 
@@ -20,6 +21,8 @@ class imu_estimator : public rclcpp::Node
 {
 	rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr m_imu_sub;
 	rclcpp::Publisher<geometry_msgs::msg::Vector3>::SharedPtr m_euler_pub;
+
+	rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr m_imu_reset_sub;
 	
 	rclcpp::TimerBase::SharedPtr m_timer;
 
@@ -40,6 +43,8 @@ public:
 
 		m_euler_pub = this->create_publisher<geometry_msgs::msg::Vector3>(
 			"imu_euler", 10);
+
+		m_imu_reset_sub = this->create_subscription<std_msgs::msg::Bool>("imu_reset", 10, std::bind(&imu_estimator::imu_reset, this, std::placeholders::_1));
 
 		m_euler_estimate = Eigen::Vector3d::Zero();
 		m_P_estimate = 0.0174 * dt * dt * Eigen::Matrix3d::Identity();
@@ -142,6 +147,16 @@ private:
 		euler_msg.set__z(m_euler_estimate.z());
 
 		m_euler_pub->publish(euler_msg);
+	}
+
+	void imu_reset(const std_msgs::msg::Bool::SharedPtr msg)
+	{
+		if(msg->data)
+		{
+			m_euler_estimate.x() = 0;
+			m_euler_estimate.y() = 0;
+			m_euler_estimate.z() = 0;
+		}
 	}
 };
 
