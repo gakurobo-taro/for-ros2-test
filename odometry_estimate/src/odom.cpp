@@ -31,6 +31,7 @@ class odometry_node : public rclcpp::Node
 	odom_interface::srv::OdomSrv::Response::SharedPtr m_odom_response;
 	
 	geometry_msgs::msg::Pose2D::SharedPtr m_odom_pose;
+	double m_odom_stamdard_theta; 
 
 	std::unique_ptr<tf2_ros::TransformBroadcaster> m_odom_tf_broadcaster;
 
@@ -78,6 +79,7 @@ public:
 		m_odom_pose->x = 0.0;
 		m_odom_pose->y = 0.0;
 		m_odom_pose->theta = 0.0;
+		m_odom_stamdard_theta = 0.0;
 
 		m_odom_tf_broadcaster = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
 
@@ -150,15 +152,15 @@ private:
 
 		Eigen::Matrix3d rotation_matrix;
 		rotation_matrix <<
-			cos(m_odom_pose->theta), -sin(m_odom_pose->theta), 0,
-			sin(m_odom_pose->theta),  cos(m_odom_pose->theta), 0,
+			cos(-m_odom_pose->theta), -sin(-m_odom_pose->theta), 0,
+			sin(-m_odom_pose->theta),  cos(-m_odom_pose->theta), 0,
 			0                      , 0                       , 1;
 
 		auto truth_velocity = rotation_matrix * xy_theta_velocity;
 
-		m_odom_pose->x +=xy_theta_velocity(0) * dt;
-		m_odom_pose->y += xy_theta_velocity(1) * dt;
-		// m_odom_pose->theta += xy_theta_velocity(2) * dt;
+		m_odom_pose->x +=truth_velocity(0) * dt;
+		m_odom_pose->y -= truth_velocity(1) * dt;
+		// m_odom_pose->theta += truth_velocity(2) * dt;
 
 		auto twist_msg = std::make_shared<geometry_msgs::msg::Twist>();
 		twist_msg->linear.x = xy_theta_velocity(0);
@@ -172,7 +174,7 @@ private:
 
 		geometry_msgs::msg::TransformStamped tf_msg;
 		tf_msg.header.stamp = this->now();
-		tf_msg.header.frame_id = "odometry";
+		tf_msg.header.frame_id = "odom";
 		tf_msg.child_frame_id = "base_footprint";
 
 		tf_msg.transform.translation.x = m_odom_pose->x;
@@ -180,6 +182,7 @@ private:
 		tf_msg.transform.translation.z = 0.0;
 
 		tf2::Quaternion q;
+		// q.setRPY(0, 0, m_odom_stamdard_theta);
 		q.setRPY(0, 0, m_odom_pose->theta);
 
 		tf_msg.transform.rotation.x = q.getX();
@@ -240,6 +243,7 @@ private:
 			m_odom_pose->x = 0.0;
             m_odom_pose->y = 0.0;
             m_odom_pose->theta = 0.0;
+			m_odom_stamdard_theta = 0.0;
 		}
 	}
 
@@ -248,6 +252,8 @@ private:
 		m_odom_pose->x = msg->x;
         m_odom_pose->y = msg->y;
         m_odom_pose->theta = msg->theta;
+		m_odom_stamdard_theta = msg->theta;
+
 	}
 };
 
