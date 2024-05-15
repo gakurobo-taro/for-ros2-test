@@ -33,7 +33,6 @@ class odometry_node : public rclcpp::Node
 	odom_interface::srv::OdomSrv::Response::SharedPtr m_odom_response;
 	
 	geometry_msgs::msg::Pose2D::SharedPtr m_odom_pose;
-	double m_odom_stamdard_theta; 
 	geometry_msgs::msg::Vector3::SharedPtr m_imu_euler;
 
 	std::unique_ptr<tf2_ros::TransformBroadcaster> m_odom_tf_broadcaster;
@@ -84,7 +83,6 @@ public:
 		m_odom_pose->x = 0.0;
 		m_odom_pose->y = 0.0;
 		m_odom_pose->theta = 0.0;
-		m_odom_stamdard_theta = 0.0;
 
 		m_odom_tf_broadcaster = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
 
@@ -194,7 +192,6 @@ private:
 		tf_msg.transform.translation.z = 0.0;
 
 		tf2::Quaternion q;
-		// q.setRPY(0, 0, m_odom_stamdard_theta);
 		q.setRPY(0, 0, m_odom_pose->theta);
 
 		tf_msg.transform.rotation.x = q.getX();
@@ -255,7 +252,6 @@ private:
 			m_odom_pose->x = 0.0;
             m_odom_pose->y = 0.0;
             m_odom_pose->theta = 0.0;
-			m_odom_stamdard_theta = 0.0;
 		}
 	}
 
@@ -264,8 +260,6 @@ private:
 		m_odom_pose->x = msg->x;
         m_odom_pose->y = msg->y;
         m_odom_pose->theta = msg->theta;
-		m_odom_stamdard_theta = msg->theta;
-
 	}
 
 	void imu_callback(const geometry_msgs::msg::Vector3::SharedPtr msg){
