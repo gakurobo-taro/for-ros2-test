@@ -8,6 +8,7 @@
 #include <geometry_msgs/msg/twist.hpp>
 #include <geometry_msgs/msg/pose2_d.hpp>
 #include "geometry_msgs/msg/transform_stamped.hpp"
+#include "geometry_msgs/msg/vector3.hpp"
 
 #include "tf2/LinearMath/Quaternion.h"
 #include <tf2_ros/transform_broadcaster.h>
@@ -24,6 +25,7 @@ class odometry_node : public rclcpp::Node
 	rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr m_twist_pub;
 	rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr m_reset_sub;
 	rclcpp::Subscription<geometry_msgs::msg::Pose2D>::SharedPtr m_set_pose_sub;
+	rclcpp::Subscription<geometry_msgs::msg::Vector3>::SharedPtr m_imu_sub;
 
 	rclcpp::TimerBase::SharedPtr m_timer;
 	rclcpp::TimerBase::SharedPtr m_request_timer;
@@ -32,6 +34,7 @@ class odometry_node : public rclcpp::Node
 	
 	geometry_msgs::msg::Pose2D::SharedPtr m_odom_pose;
 	double m_odom_stamdard_theta; 
+	geometry_msgs::msg::Vector3::SharedPtr m_imu_euler;
 
 	std::unique_ptr<tf2_ros::TransformBroadcaster> m_odom_tf_broadcaster;
 
@@ -71,6 +74,8 @@ public:
 			"odom_reset", 10, std::bind(&odometry_node::reset_pose, this, std::placeholders::_1));
 		m_set_pose_sub = this->create_subscription<geometry_msgs::msg::Pose2D>(
             "odom_set_pose", 10, std::bind(&odometry_node::set_pose, this, std::placeholders::_1));
+		m_imu_sub = this->create_subscription<geometry_msgs::msg::Vector3>(
+            "imu_euler", 10, std::bind(&odometry_node::imu_callback, this, std::placeholders::_1));
 
         m_timer = this->create_wall_timer(50ms, std::bind(&odometry_node::timer_callback, this));
 		m_request_timer = this->create_wall_timer(10ms, std::bind(&odometry_node::request_timer_callback, this));
@@ -82,6 +87,11 @@ public:
 		m_odom_stamdard_theta = 0.0;
 
 		m_odom_tf_broadcaster = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
+
+		m_imu_euler = std::make_shared<geometry_msgs::msg::Vector3>();
+		m_imu_euler->x = 0.0;
+		m_imu_euler->y = 0.0;
+		m_imu_euler->z = 0.0;
 
 		m_odom_response = nullptr;
 	}
@@ -161,6 +171,8 @@ private:
 		m_odom_pose->x +=truth_velocity(0) * dt;
 		m_odom_pose->y -= truth_velocity(1) * dt;
 		// m_odom_pose->theta += truth_velocity(2) * dt;
+		const double magic_number_imu = 1.056;
+		m_odom_pose->theta = m_imu_euler->z * magic_number_imu;
 
 		auto twist_msg = std::make_shared<geometry_msgs::msg::Twist>();
 		twist_msg->linear.x = xy_theta_velocity(0);
@@ -254,6 +266,12 @@ private:
         m_odom_pose->theta = msg->theta;
 		m_odom_stamdard_theta = msg->theta;
 
+	}
+
+	void imu_callback(const geometry_msgs::msg::Vector3::SharedPtr msg){
+		m_imu_euler->x = msg->x;
+		m_imu_euler->y = msg->y;
+		m_imu_euler->z = msg->z;
 	}
 };
 
