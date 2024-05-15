@@ -11,7 +11,7 @@ def generate_launch_description():
                 output='screen',
                 emulate_tty=True,
                 parameters=[
-                    {"serial_name": "/dev/ttyACM0"}
+                    {"serial_name": "/dev/ttyACM1"}
                 ]
             ),
         Node(
@@ -32,5 +32,10 @@ def generate_launch_description():
                 'stderr': 'screen',
                 },
             emulate_tty=True,
+        ),
+        Node(package='tf2_ros',
+            executable='static_transform_publisher',
+            name='static_tf_pub_laser',
+            arguments=['0.185', '0', '0.0','0', '0', '0', '1','base_footprint','imu0'],
         )
-    ])
+])
